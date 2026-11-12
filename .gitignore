@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.env.*
+*.sqlite*
+*.db
+*.pem
+*.key
+auth_token.txt
+bridge_config.json
+runtime/
+workspace/
+logs/
+backups/
+*.log
