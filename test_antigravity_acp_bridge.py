@@ -95,6 +95,8 @@ while True:
         sys.stdout.flush()
     elif method == "session/prompt":
         prompt_text = params["prompt"][0]["text"]
+        if "SLOW_HEARTBEAT" in prompt_text:
+            time.sleep(0.35)
         overlap = next((m for m in ("OVERLAP_A", "OVERLAP_B", "OVERLAP_C") if m in prompt_text), None)
         if overlap:
             Path(overlap).touch()
@@ -592,6 +594,18 @@ class BridgeUnitTests(unittest.TestCase):
                 self.assertIn("acp_upstream_interrupted", sse_interrupted)
                 self.assertNotIn("event: response.completed", sse_interrupted)
                 self.assertNotIn("superseded", sse_interrupted)
+
+                slow = urllib.request.Request(
+                    f"http://127.0.0.1:{port}/v1/responses",
+                    data=json.dumps({"model": "gemini-4-carbon", "stream": True, "input": "SLOW_HEARTBEAT"}).encode(),
+                    headers={"Authorization": f"Bearer {tok}", "Content-Type": "application/json"},
+                )
+                with mock.patch.object(bridge, "SSE_HEARTBEAT_SECONDS", 0.05):
+                    with urllib.request.urlopen(slow, timeout=10) as response:
+                        sse_slow = response.read().decode("utf-8")
+                self.assertGreaterEqual(sse_slow.count("event: response.in_progress"), 2)
+                self.assertIn("event: response.completed", sse_slow)
+                self.assertNotIn(": keepalive", sse_slow)
 
                 # 4. Native ACP tool rejection -> response.failed
                 req_native = urllib.request.Request(
