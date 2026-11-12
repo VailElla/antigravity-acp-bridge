@@ -39,7 +39,7 @@ import time
 from typing import Any, Iterator
 import uuid
 
-BRIDGE_VERSION = "1.1.4"
+BRIDGE_VERSION = "1.1.5"
 LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
 SETTINGS: dict[str, Any] = {
@@ -142,6 +142,7 @@ MAX_ACP_CONTEXT_PART_BYTES = 192 * 1024
 # Leave headroom for ACP's prompt wrappers and any client-tool catalog. ACP can
 # truncate oversized prompt text from the end, losing the newest conversation.
 MAX_ACP_TRANSCRIPT_BYTES = 160 * 1024
+SSE_HEARTBEAT_SECONDS = 5.0
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 ALLOWED_IMAGE_MIMES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 DEFAULT_FUNCTION_NAMESPACE = "functions"
@@ -2247,14 +2248,10 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
                     return False
 
         def send_keepalive() -> bool:
-            with write_lock:
-                try:
-                    self.wfile.write(b": keepalive\n\n")
-                    self.wfile.flush()
-                    return True
-                except OSError:
-                    job.cancel()
-                    return False
+            # SSE comments are ignored by some clients before they reach the
+            # response-event timeout. A standard progress event keeps those
+            # clients alive without fabricating any output text or tool calls.
+            return send_sse("response.in_progress", {"response": init_resp})
 
         init_resp = _build_response_object(
             resp_id=resp_id,
@@ -2292,7 +2289,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
 
         threading.Thread(target=worker, daemon=True).start()
 
-        while not done_evt.wait(timeout=5.0):
+        while not done_evt.wait(timeout=SSE_HEARTBEAT_SECONDS):
             if not send_keepalive():
                 return
 

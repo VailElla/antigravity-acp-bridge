@@ -18,6 +18,8 @@ ACP's text budget is exceeded, it prioritizes the first task, the newest user
 message and recent history, and marks omitted content. It rejects an oversized
 newest user message instead of silently discarding it. It also recognizes a
 specific ACP interruption and can retry once within the existing deadline.
+For slow streamed requests it emits `response.in_progress` events to keep
+compatible clients connected; these events do not guarantee upstream progress.
 
 ## Security boundaries
 
